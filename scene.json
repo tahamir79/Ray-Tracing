@@ -5,41 +5,41 @@
     "fov": 60.0
   },
   "room": {
-    "size": [8.0, 6.0, 8.0],
-    "center": [0.0, 3.0, 0.0],
+    "size": [16.0, 12.0, 16.0],
+    "center": [0.0, 6.0, 0.0],
     "wall_color": [0.8, 0.8, 0.9],
     "floor_color": [0.6, 0.5, 0.4],
     "ceiling_color": [0.9, 0.9, 0.95]
   },
   "light": {
-    "position": [1.5, 4.5, -1.5],
+    "position": [0.0, 11.5, 0.0],
     "radius": 0.25,
     "intensity": [40.0, 36.0, 32.0],
     "color": [1.0, 0.95, 0.9]
   },
   "mirrors": [
     {
-      "position": [0.0, 3.0, -3.9],
+      "position": [0.0, 6.0, -7.9],
       "normal": [0.0, 0.0, 1.0],
-      "size": [8.0, 6.0],
+      "size": [16.0, 12.0],
       "reflectivity": 0.95
     },
     {
-      "position": [3.9, 3.0, 0.0],
+      "position": [7.9, 6.0, 0.0],
       "normal": [-1.0, 0.0, 0.0],
-      "size": [8.0, 6.0],
+      "size": [16.0, 12.0],
       "reflectivity": 0.95
     },
     {
-      "position": [-3.9, 3.0, 0.0],
+      "position": [-7.9, 6.0, 0.0],
       "normal": [1.0, 0.0, 0.0],
-      "size": [8.0, 6.0],
+      "size": [16.0, 12.0],
       "reflectivity": 0.95
     },
     {
-      "position": [0.0, 3.0, 3.9],
+      "position": [0.0, 6.0, 7.9],
       "normal": [0.0, 0.0, -1.0],
-      "size": [8.0, 6.0],
+      "size": [16.0, 12.0],
       "reflectivity": 0.95
     }
   ],

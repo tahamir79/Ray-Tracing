@@ -191,14 +191,29 @@
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x1a1a2e);
         
-        const camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
-        camera.position.set(0, 1.5, 5);
+        const camera = new THREE.PerspectiveCamera(60, canvas.clientWidth / canvas.clientHeight, 0.1, 2000);
+        camera.position.set(0, 3, 10);  // Adjusted for bigger room
         
         const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
         renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        
+        // Create render targets for recursive mirror reflections (fractal effect)
+        const mirrorRenderTargets = [];
+        const maxReflectionDepth = 10;  // Deep recursion for fractal effect
+        
+        for (let i = 0; i < maxReflectionDepth; i++) {
+            const rt = new THREE.WebGLRenderTarget(canvas.clientWidth, canvas.clientHeight, {
+                minFilter: THREE.LinearFilter,
+                magFilter: THREE.LinearFilter,
+                format: THREE.RGBAFormat
+            });
+            mirrorRenderTargets.push(rt);
+        }
         
         const controls = new OrbitControls(camera, canvas);
-        controls.target.set(0, 1.5, 0);
+        controls.target.set(0, 6, 0);  // Center of bigger room
         controls.enableDamping = true;
         
         // Keyboard movement state for candle
@@ -209,7 +224,8 @@
             d: false,
             q: false,  // Up
             e: false,  // Down
-            shift: false  // Speed boost
+            shift: false,  // Speed boost
+            space: false  // Jump
         };
         
         // Movement speed
@@ -217,19 +233,29 @@
         const baseSpeed = 0.05;
         const fastSpeed = 0.15;
         
+        // Physics simulation for candle
+        const candlePhysics = {
+            velocity: new THREE.Vector3(0, 0, 0),  // Current velocity
+            gravity: -0.02,  // Gravity acceleration
+            jumpPower: 0.35,  // Initial jump velocity
+            jumpMultiplier: 1.25,  // Distance multiplier for jump
+            onGround: true,
+            groundY: null  // Will be set when candle is created
+        };
+        
         // Store candle objects for movement
         let candleObjects = [];
         
         // Load scene - embedded scene data (works without server)
-        let sceneData = {
+            let sceneData = {
             camera: { position: [2.5, 1.8, 2.5], look_at: [0.0, 1.5, -2.0], fov: 60.0 },
-            room: { size: [8.0, 6.0, 8.0], center: [0.0, 3.0, 0.0], wall_color: [0.8, 0.8, 0.9], floor_color: [0.6, 0.5, 0.4], ceiling_color: [0.9, 0.9, 0.95] },
-            light: { position: [1.5, 4.5, -1.5], radius: 0.25, intensity: [20.0, 18.0, 16.0], color: [1.0, 0.95, 0.9] },
+            room: { size: [16.0, 12.0, 16.0], center: [0.0, 6.0, 0.0], wall_color: [0.8, 0.8, 0.9], floor_color: [0.6, 0.5, 0.4], ceiling_color: [0.9, 0.9, 0.95] },
+            light: { position: [0.0, 11.5, 0.0], radius: 0.25, intensity: [40.0, 36.0, 32.0], color: [1.0, 0.95, 0.9] },
             mirrors: [
-                { position: [0.0, 3.0, -3.9], normal: [0.0, 0.0, 1.0], size: [8.0, 6.0], reflectivity: 0.95 },
-                { position: [3.9, 3.0, 0.0], normal: [-1.0, 0.0, 0.0], size: [8.0, 6.0], reflectivity: 0.95 },
-                { position: [-3.9, 3.0, 0.0], normal: [1.0, 0.0, 0.0], size: [8.0, 6.0], reflectivity: 0.95 },
-                { position: [0.0, 3.0, 3.9], normal: [0.0, 0.0, -1.0], size: [8.0, 6.0], reflectivity: 0.95 }
+                { position: [0.0, 6.0, -7.9], normal: [0.0, 0.0, 1.0], size: [16.0, 12.0], reflectivity: 0.95 },
+                { position: [7.9, 6.0, 0.0], normal: [-1.0, 0.0, 0.0], size: [16.0, 12.0], reflectivity: 0.95 },
+                { position: [-7.9, 6.0, 0.0], normal: [1.0, 0.0, 0.0], size: [16.0, 12.0], reflectivity: 0.95 },
+                { position: [0.0, 6.0, 7.9], normal: [0.0, 0.0, -1.0], size: [16.0, 12.0], reflectivity: 0.95 }
             ],
             candles: [
                 { position: [0.0, 0.0, -2.0], height: 1.5, radius: 0.2, flame_intensity: [8.0, 6.0, 4.0], wax_color: [0.9, 0.9, 0.95] }
@@ -282,19 +308,32 @@
             ceiling.receiveShadow = true;
             scene.add(ceiling);
             
-            // Ceiling Light with smooth spectrum halo
+            // Ceiling Light - dangling from center with chain
             const light = sceneData.light;
-            const lightPos = light.position;
+            const baseLightPos = new THREE.Vector3(...light.position);
             const lightIntensity = Math.max(...(light.intensity || [20, 18, 16]));
             
-            // Main point light (very bright)
+            // Create lamp group for dangling effect
+            const lampGroup = new THREE.Group();
+            lampGroup.position.copy(baseLightPos);
+            scene.add(lampGroup);
+            
+            // Lamp chain/cord (cylinder hanging down)
+            const chainLength = 0.8;
+            const chainGeometry = new THREE.CylinderGeometry(0.02, 0.02, chainLength, 8);
+            const chainMaterial = new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.8, roughness: 0.2 });
+            const chain = new THREE.Mesh(chainGeometry, chainMaterial);
+            chain.position.set(0, -chainLength * 0.5, 0);
+            lampGroup.add(chain);
+            
+            // Main point light (very bright) - attached to lamp group
             const pointLight = new THREE.PointLight(
                 new THREE.Color(...light.color), 
                 lightIntensity * 2,  // Much brighter
-                50
+                100  // Larger range for bigger room
             );
-            pointLight.position.set(lightPos[0], lightPos[1], lightPos[2]);
-            scene.add(pointLight);
+            pointLight.position.set(0, -chainLength, 0);
+            lampGroup.add(pointLight);
             
             // Create realistic lamp shape for inner core
             const lampRadius = light.radius;
@@ -311,9 +350,9 @@
                     side: THREE.DoubleSide
                 })
             );
-            lampMesh.position.set(lightPos[0], lightPos[1], lightPos[2]);
+            lampMesh.position.set(0, -chainLength, 0);
             lampMesh.rotation.x = Math.PI;  // Flip to point down
-            scene.add(lampMesh);
+            lampGroup.add(lampMesh);
             
             // Ultra-fine smooth spectrum glow - shorter range with faster decay
             const numLayers = 60;  // Many more layers for ultra-smooth gradient
@@ -345,8 +384,9 @@
                         depthWrite: false  // Prevent z-fighting between layers
                     })
                 );
-                glowMesh.position.set(lightPos[0], lightPos[1], lightPos[2]);
-                scene.add(glowMesh);
+                // Position glow relative to lamp group
+                glowMesh.position.set(0, -chainLength, 0);
+                lampGroup.add(glowMesh);
             }
             
             // Mirrors - make them cover full walls
@@ -477,7 +517,13 @@
                 
                 // Store candle group for movement (only first candle is movable)
                 if (index === 0) {
+                    candleGroup.userData.height = height;  // Store height for physics
                     candleObjects.push(candleGroup);
+                    
+                    // Initialize physics ground level
+                    if (candlePhysics.groundY === null) {
+                        candlePhysics.groundY = pos[1] - height * 0.5;  // Bottom of candle
+                    }
                 }
             });
         }
@@ -550,6 +596,10 @@
             if (key === 'q') keys.q = true;
             if (key === 'e') keys.e = true;
             if (e.key === 'Shift') keys.shift = true;
+            if (e.key === ' ' || e.key === 'Spacebar') {
+                e.preventDefault();  // Prevent page scroll
+                keys.space = true;
+            }
         });
         
         document.addEventListener('keyup', (e) => {
@@ -561,9 +611,12 @@
             if (key === 'q') keys.q = false;
             if (key === 'e') keys.e = false;
             if (e.key === 'Shift') keys.shift = false;
+            if (e.key === ' ' || e.key === 'Spacebar') {
+                keys.space = false;
+            }
         });
         
-        // Update candle movement
+        // Update candle movement with physics simulation
         function updateMovement() {
             if (candleObjects.length === 0) return;
             
@@ -590,31 +643,131 @@
             if (keys.a) moveVector.sub(right);
             if (keys.d) moveVector.add(right);
             
-            // Up/down (world space)
-            if (keys.q) moveVector.y += 1;
-            if (keys.e) moveVector.y -= 1;
+            // Up/down (world space) - only when not using physics jump
+            if (keys.q && candlePhysics.onGround) moveVector.y += 1;
+            if (keys.e && candlePhysics.onGround) moveVector.y -= 1;
             
-            // Normalize and apply speed
+            // Normalize and apply speed for horizontal movement
             if (moveVector.length() > 0) {
                 moveVector.normalize();
                 moveVector.multiplyScalar(moveSpeed);
                 
-                // Apply movement to candle
-                candle.position.add(moveVector);
-                
-                // Keep candle within room bounds (optional - room is 8x6x8)
-                const roomBounds = 3.5;  // Half of room size minus some margin
-                candle.position.x = Math.max(-roomBounds, Math.min(roomBounds, candle.position.x));
-                candle.position.z = Math.max(-roomBounds, Math.min(roomBounds, candle.position.z));
-                candle.position.y = Math.max(0, Math.min(5, candle.position.y));  // Keep above floor, below ceiling
+                // Update horizontal velocity
+                candlePhysics.velocity.x = moveVector.x;
+                candlePhysics.velocity.z = moveVector.z;
+            } else {
+                // Apply friction to horizontal velocity
+                candlePhysics.velocity.x *= 0.9;
+                candlePhysics.velocity.z *= 0.9;
             }
+            
+            // Jump physics - space bar pressed
+            if (keys.space && candlePhysics.onGround) {
+                // Calculate jump velocity based on current movement direction
+                const horizontalSpeed = Math.sqrt(
+                    candlePhysics.velocity.x * candlePhysics.velocity.x + 
+                    candlePhysics.velocity.z * candlePhysics.velocity.z
+                );
+                
+                // Jump with 1.25x multiplier of current movement speed
+                const jumpVelocity = candlePhysics.jumpPower * (1 + horizontalSpeed * candlePhysics.jumpMultiplier);
+                candlePhysics.velocity.y = jumpVelocity;
+                candlePhysics.onGround = false;
+            }
+            
+            // Apply gravity to vertical velocity
+            if (!candlePhysics.onGround) {
+                candlePhysics.velocity.y += candlePhysics.gravity;
+            }
+            
+            // Update candle position based on velocity
+            candle.position.x += candlePhysics.velocity.x;
+            candle.position.z += candlePhysics.velocity.z;
+            candle.position.y += candlePhysics.velocity.y;
+            
+            // Ground collision detection
+            if (candlePhysics.groundY !== null) {
+                const candleHeight = candle.userData.height || 1.5;
+                const candleBottom = candle.position.y - candleHeight * 0.5;
+                
+                if (candleBottom <= candlePhysics.groundY) {
+                    candle.position.y = candlePhysics.groundY + candleHeight * 0.5;
+                    candlePhysics.velocity.y = 0;
+                    candlePhysics.onGround = true;
+                } else {
+                    candlePhysics.onGround = false;
+                }
+            }
+            
+            // Keep candle within room bounds
+            const room = sceneData.room;
+            const roomSize = room.size;
+            const roomCenter = room.center;
+            const roomBounds = roomSize[0] * 0.5 - 0.5;  // Half of room width minus margin
+            const roomHeight = roomSize[1];
+            
+            candle.position.x = Math.max(-roomBounds, Math.min(roomBounds, candle.position.x));
+            candle.position.z = Math.max(-roomBounds, Math.min(roomBounds, candle.position.z));
+            candle.position.y = Math.max(
+                candlePhysics.groundY !== null ? candlePhysics.groundY + (candle.userData.height || 1.5) * 0.5 : 0, 
+                Math.min(roomHeight - 0.5, candle.position.y)
+            );
         }
         
-        // Render loop
+        // Recursive mirror reflection rendering
+        function renderMirrorReflections() {
+            const mirrorMeshes = scene.userData.mirrorMeshes || [];
+            if (mirrorMeshes.length === 0) return;
+            
+            // Render recursive reflections for each mirror
+            mirrorMeshes.forEach((mirrorMesh, mirrorIndex) => {
+                const normal = mirrorMesh.userData.normal;
+                const mirrorPos = mirrorMesh.position;
+                
+                // Calculate reflection camera for this mirror
+                const mirrorCamera = new THREE.PerspectiveCamera(
+                    camera.fov,
+                    camera.aspect,
+                    camera.near,
+                    camera.far
+                );
+                
+                // Reflect camera position across mirror plane
+                const cameraToMirror = mirrorPos.clone().sub(camera.position);
+                const distance = cameraToMirror.dot(normal);
+                mirrorCamera.position.copy(camera.position).add(normal.multiplyScalar(2 * distance));
+                
+                // Reflect camera direction
+                const reflectedDirection = camera.getWorldDirection(new THREE.Vector3())
+                    .reflect(normal.clone().negate());
+                mirrorCamera.lookAt(
+                    mirrorCamera.position.clone().add(reflectedDirection)
+                );
+                
+                // Render scene from reflected camera to render target
+                const renderTarget = mirrorRenderTargets[Math.min(mirrorIndex, mirrorRenderTargets.length - 1)];
+                renderer.setRenderTarget(renderTarget);
+                renderer.render(scene, mirrorCamera);
+                renderer.setRenderTarget(null);
+                
+                // Apply reflection texture to mirror
+                if (mirrorMesh.material) {
+                    mirrorMesh.material.envMap = renderTarget.texture;
+                    mirrorMesh.material.needsUpdate = true;
+                }
+            });
+        }
+        
+        // Render loop with fractal mirror reflections
         function animate() {
             requestAnimationFrame(animate);
             updateMovement();
             controls.update();
+            
+            // Render recursive mirror reflections (creates fractal cascading effect)
+            renderMirrorReflections();
+            
+            // Render main scene
             renderer.render(scene, camera);
             updateFPS();
         }
