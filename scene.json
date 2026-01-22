@@ -1,0 +1,62 @@
+{
+  "camera": {
+    "position": [2.5, 1.8, 2.5],
+    "look_at": [0.0, 1.5, -2.0],
+    "fov": 60.0
+  },
+  "room": {
+    "size": [8.0, 6.0, 8.0],
+    "center": [0.0, 3.0, 0.0],
+    "wall_color": [0.8, 0.8, 0.9],
+    "floor_color": [0.6, 0.5, 0.4],
+    "ceiling_color": [0.9, 0.9, 0.95]
+  },
+  "light": {
+    "position": [1.5, 4.5, -1.5],
+    "radius": 0.25,
+    "intensity": [20.0, 18.0, 16.0],
+    "color": [1.0, 0.95, 0.9]
+  },
+  "mirrors": [
+    {
+      "position": [0.0, 1.5, -3.9],
+      "normal": [0.0, 0.0, 1.0],
+      "size": [3.0, 3.5],
+      "reflectivity": 0.95
+    },
+    {
+      "position": [3.9, 1.5, 0.0],
+      "normal": [-1.0, 0.0, 0.0],
+      "size": [2.0, 3.0],
+      "reflectivity": 0.95
+    },
+    {
+      "position": [-3.9, 1.5, 0.0],
+      "normal": [1.0, 0.0, 0.0],
+      "size": [2.0, 3.0],
+      "reflectivity": 0.95
+    },
+    {
+      "position": [0.0, 1.5, 3.9],
+      "normal": [0.0, 0.0, -1.0],
+      "size": [2.0, 3.0],
+      "reflectivity": 0.95
+    }
+  ],
+  "candles": [
+    {
+      "position": [0.0, 0.0, -2.0],
+      "height": 1.5,
+      "radius": 0.2,
+      "flame_intensity": [8.0, 6.0, 4.0],
+      "wax_color": [0.9, 0.9, 0.95]
+    }
+  ],
+  "render": {
+    "width": 800,
+    "height": 600,
+    "samples": 1,
+    "max_bounces": 50
+  }
+}
+

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ray Tracing - Interactive Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+        
+        #container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            background: #000;
+        }
+        
+        #canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        #controls {
+            width: 300px;
+            background: #2a2a2a;
+            padding: 20px;
+            overflow-y: auto;
+            border-left: 1px solid #444;
+        }
+        
+        .control-group {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #444;
+        }
+        
+        .control-group h3 {
+            margin-bottom: 10px;
+            color: #4a9eff;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            color: #aaa;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        
+        input[type="number"] {
+            width: 100%;
+            padding: 5px;
+            background: #333;
+            border: 1px solid #555;
+            color: #e0e0e0;
+            border-radius: 3px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #4a9eff;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: #5aaeff;
+        }
+        
+        button:active {
+            background: #3a8eef;
+        }
+        
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        
+        #mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .mode-btn {
+            flex: 1;
+            padding: 8px;
+            background: #333;
+            border: 1px solid #555;
+            color: #aaa;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .mode-btn.active {
+            background: #4a9eff;
+            color: white;
+            border-color: #4a9eff;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container">
+            <canvas id="canvas"></canvas>
+            <div id="info">
+                <div>Mode: <span id="mode-display">Three.js Preview</span></div>
+                <div>FPS: <span id="fps">0</span></div>
+            </div>
+        </div>
+        <div id="controls">
+            <div class="control-group">
+                <h3>Rendering Mode</h3>
+                <div id="mode-selector">
+                    <button class="mode-btn active" data-mode="threejs">Three.js</button>
+                    <button class="mode-btn" data-mode="shader">Shader RT</button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h3>Camera</h3>
+                <label>Rotation X: <span id="rot-x-val">0</span>°</label>
+                <input type="range" id="rot-x" min="-180" max="180" value="0">
+                
+                <label>Rotation Y: <span id="rot-y-val">0</span>°</label>
+                <input type="range" id="rot-y" min="-180" max="180" value="0">
+                
+                <label>Distance: <span id="dist-val">5.0</span></label>
+                <input type="range" id="distance" min="2" max="15" step="0.1" value="5.0">
+            </div>
+            
+            <div class="control-group">
+                <h3>Ray Tracing</h3>
+                <label>Max Bounces: <span id="bounces-val">4</span></label>
+                <input type="range" id="max-bounces" min="1" max="8" value="4">
+                
+                <label>Resolution Scale: <span id="res-val">1.0</span></label>
+                <input type="range" id="res-scale" min="0.25" max="1.0" step="0.25" value="1.0">
+            </div>
+            
+            <div class="control-group">
+                <h3>Human Models</h3>
+                <label>Rotation: <span id="human-rot-val">0</span>°</label>
+                <input type="range" id="human-rotation" min="0" max="360" value="0">
+            </div>
+            
+            <button id="reload-scene">Reload Scene</button>
+        </div>
+    </div>
+    
+    <script type="module" src="main.js"></script>
+</body>
+</html>
+
