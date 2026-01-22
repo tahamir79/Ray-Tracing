@@ -131,6 +131,19 @@
             </div>
             
             <div class="control-group">
+                <h3>Controls</h3>
+                <div style="font-size: 11px; color: #aaa; line-height: 1.8;">
+                    <div style="color: #4a9eff; margin-bottom: 5px;"><strong>Move Candle:</strong></div>
+                    <div><strong>W/A/S/D</strong> - Move candle</div>
+                    <div><strong>Q/E</strong> - Move up/down</div>
+                    <div><strong>Shift</strong> - Speed boost</div>
+                    <div style="color: #4a9eff; margin-top: 8px;"><strong>Camera:</strong></div>
+                    <div><strong>Mouse</strong> - Look around</div>
+                    <div><strong>Wheel</strong> - Zoom</div>
+                </div>
+            </div>
+            
+            <div class="control-group">
                 <h3>Camera</h3>
                 <label>Rotation X: <span id="rot-x-val">0</span>°</label>
                 <input type="range" id="rot-x" min="-180" max="180" value="0">
@@ -188,16 +201,35 @@
         controls.target.set(0, 1.5, 0);
         controls.enableDamping = true;
         
+        // Keyboard movement state for candle
+        const keys = {
+            w: false,
+            a: false,
+            s: false,
+            d: false,
+            q: false,  // Up
+            e: false,  // Down
+            shift: false  // Speed boost
+        };
+        
+        // Movement speed
+        let moveSpeed = 0.05;
+        const baseSpeed = 0.05;
+        const fastSpeed = 0.15;
+        
+        // Store candle objects for movement
+        let candleObjects = [];
+        
         // Load scene - embedded scene data (works without server)
         let sceneData = {
             camera: { position: [2.5, 1.8, 2.5], look_at: [0.0, 1.5, -2.0], fov: 60.0 },
             room: { size: [8.0, 6.0, 8.0], center: [0.0, 3.0, 0.0], wall_color: [0.8, 0.8, 0.9], floor_color: [0.6, 0.5, 0.4], ceiling_color: [0.9, 0.9, 0.95] },
             light: { position: [1.5, 4.5, -1.5], radius: 0.25, intensity: [20.0, 18.0, 16.0], color: [1.0, 0.95, 0.9] },
             mirrors: [
-                { position: [0.0, 1.5, -3.9], normal: [0.0, 0.0, 1.0], size: [3.0, 3.5], reflectivity: 0.95 },
-                { position: [3.9, 1.5, 0.0], normal: [-1.0, 0.0, 0.0], size: [2.0, 3.0], reflectivity: 0.95 },
-                { position: [-3.9, 1.5, 0.0], normal: [1.0, 0.0, 0.0], size: [2.0, 3.0], reflectivity: 0.95 },
-                { position: [0.0, 1.5, 3.9], normal: [0.0, 0.0, -1.0], size: [2.0, 3.0], reflectivity: 0.95 }
+                { position: [0.0, 3.0, -3.9], normal: [0.0, 0.0, 1.0], size: [8.0, 6.0], reflectivity: 0.95 },
+                { position: [3.9, 3.0, 0.0], normal: [-1.0, 0.0, 0.0], size: [8.0, 6.0], reflectivity: 0.95 },
+                { position: [-3.9, 3.0, 0.0], normal: [1.0, 0.0, 0.0], size: [8.0, 6.0], reflectivity: 0.95 },
+                { position: [0.0, 3.0, 3.9], normal: [0.0, 0.0, -1.0], size: [8.0, 6.0], reflectivity: 0.95 }
             ],
             candles: [
                 { position: [0.0, 0.0, -2.0], height: 1.5, radius: 0.2, flame_intensity: [8.0, 6.0, 4.0], wax_color: [0.9, 0.9, 0.95] }
@@ -233,78 +265,220 @@
             );
             floor.rotation.x = -Math.PI / 2;
             floor.position.set(roomCenter[0], roomCenter[1] - roomSize[1]/2, roomCenter[2]);
+            floor.receiveShadow = true;
             scene.add(floor);
             
-            // Light
+            // Matte Ceiling
+            const ceiling = new THREE.Mesh(
+                new THREE.PlaneGeometry(roomSize[0], roomSize[2]),
+                new THREE.MeshStandardMaterial({ 
+                    color: new THREE.Color(...room.ceiling_color), 
+                    roughness: 1.0,  // Fully matte
+                    metalness: 0.0    // Non-metallic
+                })
+            );
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.set(roomCenter[0], roomCenter[1] + roomSize[1]/2, roomCenter[2]);
+            ceiling.receiveShadow = true;
+            scene.add(ceiling);
+            
+            // Ceiling Light with smooth spectrum halo
             const light = sceneData.light;
             const lightPos = light.position;
-            const pointLight = new THREE.PointLight(new THREE.Color(...light.color), 5, 50);
+            const lightIntensity = Math.max(...(light.intensity || [20, 18, 16]));
+            
+            // Main point light (very bright)
+            const pointLight = new THREE.PointLight(
+                new THREE.Color(...light.color), 
+                lightIntensity * 2,  // Much brighter
+                50
+            );
             pointLight.position.set(lightPos[0], lightPos[1], lightPos[2]);
             scene.add(pointLight);
             
-            const lightMesh = new THREE.Mesh(
-                new THREE.SphereGeometry(light.radius, 16, 16),
-                new THREE.MeshBasicMaterial({ color: 0xffffaa, emissive: 0xffffaa })
-            );
-            lightMesh.position.set(lightPos[0], lightPos[1], lightPos[2]);
-            scene.add(lightMesh);
+            // Create realistic lamp shape for inner core
+            const lampRadius = light.radius;
+            const lampHeight = lampRadius * 1.8;  // Slightly elongated bulb shape
             
-            // Mirrors
+            // Inner lamp bulb (realistic light bulb shape)
+            const lampShape = new THREE.ConeGeometry(lampRadius * 0.6, lampHeight * 0.4, 8, 1, true);
+            const lampMesh = new THREE.Mesh(
+                lampShape,
+                new THREE.MeshBasicMaterial({ 
+                    color: 0xffffaa,
+                    emissive: 0xffffaa,
+                    emissiveIntensity: 3.0,
+                    side: THREE.DoubleSide
+                })
+            );
+            lampMesh.position.set(lightPos[0], lightPos[1], lightPos[2]);
+            lampMesh.rotation.x = Math.PI;  // Flip to point down
+            scene.add(lampMesh);
+            
+            // Ultra-fine smooth spectrum glow - shorter range with faster decay
+            const numLayers = 60;  // Many more layers for ultra-smooth gradient
+            const maxRadiusMultiplier = 2.0;  // Shorter range (was 4, now 2)
+            for (let i = 0; i < numLayers; i++) {
+                const t = i / (numLayers - 1);  // 0 to 1
+                const radius = light.radius * (1 + t * maxRadiusMultiplier);  // Shorter expansion
+                
+                // Color spectrum: bright yellow/white core -> warm yellow -> dim yellow -> transparent
+                // Very smooth linear interpolation
+                const r = Math.max(0, Math.min(255, 255 - t * 30));  // 255 -> 225
+                const g = Math.max(0, Math.min(255, 255 - t * 50));  // 255 -> 205
+                const b = Math.max(0, Math.min(255, 200 - t * 100)); // 200 -> 100
+                const color = (r << 16) | (g << 8) | b;
+                
+                // Opacity: 1.0 at core -> 0.0 at edge (faster exponential decay)
+                // Steeper falloff curve for more noticeable decay
+                const opacity = Math.pow(1 - t, 4.0);  // Steeper exponential fade (was 2.5)
+                
+                const glowMesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(radius, 32, 32),
+                    new THREE.MeshBasicMaterial({ 
+                        color: color,
+                        emissive: color,
+                        emissiveIntensity: opacity * 2,
+                        transparent: true,
+                        opacity: opacity,
+                        side: THREE.DoubleSide,
+                        depthWrite: false  // Prevent z-fighting between layers
+                    })
+                );
+                glowMesh.position.set(lightPos[0], lightPos[1], lightPos[2]);
+                scene.add(glowMesh);
+            }
+            
+            // Mirrors - make them cover full walls
             sceneData.mirrors.forEach(mirror => {
+                // Use full room dimensions for mirrors
+                const roomSize = room.size;
+                let mirrorWidth, mirrorHeight;
+                
+                // Determine mirror size based on wall orientation
+                if (Math.abs(mirror.normal[0]) > 0.5) {
+                    // Left/Right walls - use depth and height
+                    mirrorWidth = roomSize[2];  // depth
+                    mirrorHeight = roomSize[1]; // height
+                } else {
+                    // Front/Back walls - use width and height
+                    mirrorWidth = roomSize[0];  // width
+                    mirrorHeight = roomSize[1]; // height
+                }
+                
                 const mirrorMesh = new THREE.Mesh(
-                    new THREE.PlaneGeometry(mirror.size[0], mirror.size[1]),
+                    new THREE.PlaneGeometry(mirrorWidth, mirrorHeight),
                     new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.9, roughness: 0.1 })
                 );
-                mirrorMesh.position.set(...mirror.position);
+                // Position at room center height
+                mirrorMesh.position.set(mirror.position[0], roomCenter[1], mirror.position[2]);
                 const normal = new THREE.Vector3(...mirror.normal);
                 mirrorMesh.lookAt(
                     mirror.position[0] + normal.x,
-                    mirror.position[1] + normal.y,
+                    roomCenter[1] + normal.y,
                     mirror.position[2] + normal.z
                 );
                 scene.add(mirrorMesh);
             });
             
         // Candles
+        candleObjects = [];  // Reset candle objects array
         if (sceneData.candles) {
-            sceneData.candles.forEach(candle => {
+            sceneData.candles.forEach((candle, index) => {
                 const pos = candle.position;
                 const height = candle.height || 1.5;
                 const radius = candle.radius || 0.2;
                 const waxColor = new THREE.Color(...(candle.wax_color || [0.9, 0.9, 0.95]));
+                
+                // Create a group for the candle (so we can move it as one unit)
+                const candleGroup = new THREE.Group();
+                candleGroup.userData.originalY = pos[1];  // Store original Y position
                 
                 // Candle body (cylinder)
                 const candleBody = new THREE.Mesh(
                     new THREE.CylinderGeometry(radius, radius, height, 16),
                     new THREE.MeshStandardMaterial({ color: waxColor, roughness: 0.8 })
                 );
-                candleBody.position.set(pos[0], pos[1] + height * 0.5, pos[2]);
+                candleBody.position.set(0, height * 0.5, 0);
                 candleBody.castShadow = true;
-                scene.add(candleBody);
+                candleGroup.add(candleBody);
                 
-                // Flame (emissive sphere)
-                const flameIntensity = candle.flame_intensity || [8, 6, 4];
-                const flameColor = new THREE.Color(flameIntensity[0] / 10, flameIntensity[1] / 10, flameIntensity[2] / 10);
-                const flame = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.12, 16, 16),
-                    new THREE.MeshBasicMaterial({ 
-                        color: 0xffaa44,
-                        emissive: 0xffaa44,
-                        emissiveIntensity: 2.0
-                    })
-                );
-                flame.position.set(pos[0], pos[1] + height + 0.15, pos[2]);
+                // Flame with smooth spectrum halo
+                const flameIntensity = candle.flame_intensity || [25, 20, 15];
+                const maxIntensity = Math.max(...flameIntensity);
                 
-                // Point light from flame
+                // Smooth spectrum glow - many layers with gradual color/opacity transition
+                const numLayers = 25;  // More layers for smoother transition
+                const baseRadius = 0.12;
+                
+                for (let i = 0; i < numLayers; i++) {
+                    const t = i / (numLayers - 1);  // 0 to 1
+                    const radius = baseRadius * (1 + t * 4);  // Expand from core to 5x radius
+                    
+                    // Color spectrum: bright orange/yellow core -> orange -> red-orange -> dark red -> transparent
+                    // Smooth transition through the spectrum
+                    let r, g, b;
+                    if (t < 0.3) {
+                        // Core: Bright orange/yellow (0xffaa44)
+                        const localT = t / 0.3;
+                        r = 255 - localT * 10;  // 255 -> 245
+                        g = 170 - localT * 20;  // 170 -> 150
+                        b = 68 - localT * 10;   // 68 -> 58
+                    } else if (t < 0.6) {
+                        // Middle: Orange to red-orange
+                        const localT = (t - 0.3) / 0.3;
+                        r = 245 - localT * 30;  // 245 -> 215
+                        g = 150 - localT * 40;  // 150 -> 110
+                        b = 58 - localT * 20;   // 58 -> 38
+                    } else {
+                        // Outer: Red-orange to dark red/transparent
+                        const localT = (t - 0.6) / 0.4;
+                        r = 215 - localT * 100; // 215 -> 115
+                        g = 110 - localT * 80;  // 110 -> 30
+                        b = 38 - localT * 30;   // 38 -> 8
+                    }
+                    
+                    const color = (Math.max(0, Math.min(255, r)) << 16) | 
+                                  (Math.max(0, Math.min(255, g)) << 8) | 
+                                  Math.max(0, Math.min(255, b));
+                    
+                    // Opacity: 1.0 at core -> 0.0 at edge (faster exponential decay)
+                    // Steeper falloff curve for more noticeable decay
+                    const opacity = Math.pow(1 - t, 4.5);  // Steeper exponential fade (was 2.2)
+                    
+                    const flameGlow = new THREE.Mesh(
+                        new THREE.SphereGeometry(radius, 32, 32),
+                        new THREE.MeshBasicMaterial({ 
+                            color: color,
+                            emissive: color,
+                            emissiveIntensity: opacity * 3,
+                            transparent: true,
+                            opacity: opacity,
+                            side: THREE.DoubleSide
+                        })
+                    );
+                    flameGlow.position.set(0, height + 0.15, 0);
+                    candleGroup.add(flameGlow);
+                }
+                
+                // Point light from flame (much brighter)
                 const flameLight = new THREE.PointLight(
-                    new THREE.Color(1.0, 0.7, 0.5),
-                    Math.max(...flameIntensity),
-                    10
+                    new THREE.Color(1.0, 0.75, 0.6),
+                    maxIntensity * 1.5,  // Much brighter
+                    15  // Larger range
                 );
-                flameLight.position.set(pos[0], pos[1] + height + 0.15, pos[2]);
+                flameLight.position.set(0, height + 0.15, 0);
                 flameLight.castShadow = true;
-                scene.add(flameLight);
-                scene.add(flame);
+                candleGroup.add(flameLight);
+                
+                // Set initial position
+                candleGroup.position.set(pos[0], pos[1], pos[2]);
+                scene.add(candleGroup);
+                
+                // Store candle group for movement (only first candle is movable)
+                if (index === 0) {
+                    candleObjects.push(candleGroup);
+                }
             });
         }
         
@@ -366,9 +540,80 @@
             }
         }
         
+        // Keyboard event handlers
+        document.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w') keys.w = true;
+            if (key === 'a') keys.a = true;
+            if (key === 's') keys.s = true;
+            if (key === 'd') keys.d = true;
+            if (key === 'q') keys.q = true;
+            if (key === 'e') keys.e = true;
+            if (e.key === 'Shift') keys.shift = true;
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w') keys.w = false;
+            if (key === 'a') keys.a = false;
+            if (key === 's') keys.s = false;
+            if (key === 'd') keys.d = false;
+            if (key === 'q') keys.q = false;
+            if (key === 'e') keys.e = false;
+            if (e.key === 'Shift') keys.shift = false;
+        });
+        
+        // Update candle movement
+        function updateMovement() {
+            if (candleObjects.length === 0) return;
+            
+            moveSpeed = keys.shift ? fastSpeed : baseSpeed;
+            
+            const candle = candleObjects[0];  // Move first candle
+            const moveVector = new THREE.Vector3();
+            
+            // Get camera direction for relative movement
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            direction.y = 0;  // Keep movement horizontal
+            direction.normalize();
+            
+            // Right vector (perpendicular to forward)
+            const right = new THREE.Vector3();
+            right.crossVectors(direction, new THREE.Vector3(0, 1, 0)).normalize();
+            
+            // Forward/backward (relative to camera view)
+            if (keys.w) moveVector.add(direction);
+            if (keys.s) moveVector.sub(direction);
+            
+            // Left/right (relative to camera view)
+            if (keys.a) moveVector.sub(right);
+            if (keys.d) moveVector.add(right);
+            
+            // Up/down (world space)
+            if (keys.q) moveVector.y += 1;
+            if (keys.e) moveVector.y -= 1;
+            
+            // Normalize and apply speed
+            if (moveVector.length() > 0) {
+                moveVector.normalize();
+                moveVector.multiplyScalar(moveSpeed);
+                
+                // Apply movement to candle
+                candle.position.add(moveVector);
+                
+                // Keep candle within room bounds (optional - room is 8x6x8)
+                const roomBounds = 3.5;  // Half of room size minus some margin
+                candle.position.x = Math.max(-roomBounds, Math.min(roomBounds, candle.position.x));
+                candle.position.z = Math.max(-roomBounds, Math.min(roomBounds, candle.position.z));
+                candle.position.y = Math.max(0, Math.min(5, candle.position.y));  // Keep above floor, below ceiling
+            }
+        }
+        
         // Render loop
         function animate() {
             requestAnimationFrame(animate);
+            updateMovement();
             controls.update();
             renderer.render(scene, camera);
             updateFPS();

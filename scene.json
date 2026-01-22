@@ -14,32 +14,32 @@
   "light": {
     "position": [1.5, 4.5, -1.5],
     "radius": 0.25,
-    "intensity": [20.0, 18.0, 16.0],
+    "intensity": [40.0, 36.0, 32.0],
     "color": [1.0, 0.95, 0.9]
   },
   "mirrors": [
     {
-      "position": [0.0, 1.5, -3.9],
+      "position": [0.0, 3.0, -3.9],
       "normal": [0.0, 0.0, 1.0],
-      "size": [3.0, 3.5],
+      "size": [8.0, 6.0],
       "reflectivity": 0.95
     },
     {
-      "position": [3.9, 1.5, 0.0],
+      "position": [3.9, 3.0, 0.0],
       "normal": [-1.0, 0.0, 0.0],
-      "size": [2.0, 3.0],
+      "size": [8.0, 6.0],
       "reflectivity": 0.95
     },
     {
-      "position": [-3.9, 1.5, 0.0],
+      "position": [-3.9, 3.0, 0.0],
       "normal": [1.0, 0.0, 0.0],
-      "size": [2.0, 3.0],
+      "size": [8.0, 6.0],
       "reflectivity": 0.95
     },
     {
-      "position": [0.0, 1.5, 3.9],
+      "position": [0.0, 3.0, 3.9],
       "normal": [0.0, 0.0, -1.0],
-      "size": [2.0, 3.0],
+      "size": [8.0, 6.0],
       "reflectivity": 0.95
     }
   ],
@@ -48,7 +48,7 @@
       "position": [0.0, 0.0, -2.0],
       "height": 1.5,
       "radius": 0.2,
-      "flame_intensity": [8.0, 6.0, 4.0],
+      "flame_intensity": [25.0, 20.0, 15.0],
       "wax_color": [0.9, 0.9, 0.95]
     }
   ],
